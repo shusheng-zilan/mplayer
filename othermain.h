@@ -1,9 +1,15 @@
+#include "lyrics_process.h"
 #ifndef __OTHERMAIN_H_
 #define __OTHERMAIN_H_
 
 typedef struct _window //结构体 方便进行传地址（内容）
 {
 	GtkWidget *main_window;
+	/*GtkWidget 表示的是 GTK+ 库中一个窗口小部件（widget）。
+	  GtkWidget 作为 GTK+ 的基础之一，表示它可以接受用户输入的控件，
+	  例如按钮、文本框、标签等。
+	  使用这个窗口小部件可以创建各种类型的图形用户界面（GUI），
+	  使得程序与用户交互更加方便和友好。*/
 	GtkWidget *table;
 	GtkWidget *image;
 	GtkWidget *image01;
@@ -29,6 +35,8 @@ typedef struct _window //结构体 方便进行传地址（内容）
 	GtkWidget *fixed;//
 	GtkWidget *clist;//分栏列表
 	GtkWidget *lable_lrc;
+	
+	//gchar就是char
 	gchar buf[128];//现在放的歌曲名称格式为   xxxx。MP3
 	gchar buff[128];//进行对比所用的歌名   如果切换歌曲buf！=buff   如果没切歌 buf=buff
 	gchar song_name[128];   
@@ -37,6 +45,8 @@ typedef struct _window //结构体 方便进行传地址（内容）
 	gchar song_lrc[128];
 	gchar song[128];
 	gchar singer[128];
+	
+	//gint 就是int 
 	gint now_time;
 	gint lrc_time;
 	gint fd1;//命名管道
@@ -55,6 +65,7 @@ typedef struct _window //结构体 方便进行传地址（内容）
 	float xx;
 	float yy;
 	
+	Name *name_list;
 	
 }MPLAYER; //重命名为WINDOW
 

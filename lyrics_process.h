@@ -1,14 +1,7 @@
 #ifndef _LYRICS_PROCESS_H_
 #define _LYRICS_PROCESS_H_
 
-/*******************************************************
- *一句歌词长度
- ********************************************************/
 #define lrc_length 255
-
-/*******************************************************
- *歌词文件一行最多的时间标签数
- ********************************************************/
 #define lrc_time_labels 255
 
 typedef unsigned int uint;
@@ -21,7 +14,7 @@ typedef struct lylics
 {
 	uint time;              //歌词对应的时间
 	char lrc[lrc_length];   //歌词
-	struct lylics *next;    //下一句歌词
+	struct lylics *next, *prev;    //下一句歌词/上一句歌词
 }LRC;
 
 /*******************************************************
@@ -56,4 +49,13 @@ extern LRC *dispose_lrc(char *name, LRC_PTR *lrc);
  ********************************************************/
 extern void free_lrc_arry(LRC_PTR *lrc);
 
+
+typedef struct node {
+	char* data;
+	struct node* next;        
+} Name ;
+Name * create_node1(const char *filename);
+Name * add_node(Name * head, char* newdata);
+void free_list(Name * head);
+Name * read_audio_files(const char* folder_path);
 #endif

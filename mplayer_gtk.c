@@ -16,7 +16,6 @@ static void chang_background(GtkWidget *widget, int w, int h, const gchar *path)
 {
 	gtk_widget_set_app_paintable(widget, TRUE);		//允许窗口可以绘图
 	gtk_widget_realize(widget);	
-	
 	/* 更改背景图时，图片会重叠
 	 * 这时要手动调用下面的函数，让窗口绘图区域失效，产生窗口重绘制事件（即 expose 事件）。
 	 */
@@ -69,27 +68,19 @@ int my_course( MPLAYER *player)
 	
 	pthread_t pth_id3;
 	pthread_create(&pth_id3, NULL, send_player,(void *)player);
-	
 	g_thread_create((GThreadFunc)my_read, player,FALSE, NULL);
-	
 	g_thread_create((GThreadFunc)the_lrc, player, FALSE, NULL);
 	return 0;
 }
-
-
 
 //---------------------------------------------------------------------------------------------------
 void*  send_player(void *arg)//向mplayer无限的去发  
 {
 	MPLAYER *player = (MPLAYER *)arg;
-	
 	while(1)
 	{
-		
 		if (player->signal_i == 0)
 		{
-			//printf("xiexiexie----------------%d\n", player->signal_i);
-			
 			write(player->fd1, "get_time_pos\n", strlen("get_time_pos\n"));//获取当前播放的时间命令
 			usleep(100*1000);
 			write(player->fd1, "get_time_length\n", strlen("get_time_length\n"));//获取总时长
@@ -100,22 +91,31 @@ void*  send_player(void *arg)//向mplayer无限的去发
 			usleep(100*1000);
 			write(player->fd1, "get_file_name\n", strlen("get_file_name\n"));//获取当前歌曲文件名
 			usleep(100*1000);
+			write(player->fd1, "get_meta_artist\n", strlen("get_meta_artist\n"));//获取歌手名
+			usleep(100*1000);
 		}
-		
 	}
-	
-	
-	
 }
 
 
 void my_player(MPLAYER *player)//开启mplayer
 {
-	
-	execlp("mplayer","mplayer","-ac", "mad", "-slave","-quiet","-idle","-input","file=./song_fifo","../music/coffe.mp3",NULL);
-	perror("execlp");
+	const char* music_dir = "../Music/";
+	Name* name_list = read_audio_files(music_dir);
+	while (name_list != NULL)
+	{
+		char path[100] = "../Music/";
+		char *file_name = name_list->data;
+		strcat(path, file_name);
+		execlp("mplayer","mplayer","-ac", "mad", "-slave","-quiet","-idle","-input","file=./song_fifo",path,NULL);
+		perror("execlp");
+		name_list = name_list->next;
+	}
+	free_list(name_list);
 	exit(-1);	
 }
+
+
 
 //-----------------------------------------------父进程控制中心--------------------------------------
 void control(MPLAYER *player)
@@ -124,7 +124,6 @@ void control(MPLAYER *player)
 	player->fd1 = open("./song_fifo",O_WRONLY);
 	char open_song_name[128]="";
 	strcpy(open_song_name,player->song_name);
-	
 }
 
 
@@ -133,184 +132,131 @@ void control(MPLAYER *player)
 
 void window_my_gtk(MPLAYER *player)
 {
-	//创建一个主窗口
 	player->main_window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 	gtk_widget_set_size_request(player->main_window, 802, 482);
-	//设置其他控件距离主窗口边界的宽度
 	gtk_container_set_border_width(GTK_CONTAINER(player->main_window), 1);
-	//设置主窗口居中显示
-	//gtk_window_set_position(GTK_WINDOW(player->main_window), GTK_WIN_POS_CENTER);
-	
-	chang_background(player->main_window , 800, 480, "./background/111.jpg");
-	//默认的窗口是不支持鼠标事件的
-	//需要手动添加鼠标事件
-	//需要添加鼠标单击事件   以及 鼠标移动事件   等（键盘、进入控件区等）
-	
+	chang_background(player->main_window , 800, 480, "./background/111.png");
 	gtk_widget_add_events(player->main_window, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_MOTION_MASK);
-	
-	
-	
 	//移动鼠标
 	g_signal_connect(player->main_window, "button-press-event",G_CALLBACK(deal_mouse_press),player);
-	
-	
-	
 	//关闭当前主窗口时退出
-	g_signal_connect(player->main_window, "destroy", G_CALLBACK(gtk_main_quit),NULL);//每当敲出一个函数的调用时需直接加上；以防止忘记
+	g_signal_connect(player->main_window, "destroy", G_CALLBACK(gtk_main_quit),NULL);
+	
 	//----------------------------表格布局--------------------------------------------
 	//创建table表格布局容器
 	player->table = gtk_table_new(48, 80, TRUE);
 	//将表格布局容器添加到主窗口中
 	gtk_container_add(GTK_CONTAINER(player->main_window),player->table);
 	
-	
-	// 
 	//------------------------------按钮---------------------------------------------
 	//创建button_off
 	player->button_off = gtk_button_new_with_label("");
-	//将button_off添加到table中
 	gtk_table_attach_defaults(GTK_TABLE(player->table),player->button_off,64,72, 41,44);
-	//创建一个图片控件
 	player->image = gtk_image_new_from_pixbuf(NULL);
 	load_image(player->image, "./button/off.png",80,30);  
-	//将建button_off的背景设成透明
 	gtk_button_set_relief(GTK_BUTTON(player->button_off),GTK_RELIEF_NONE);
-	//将图片空间添加到player->button_off上
 	gtk_button_set_image(GTK_BUTTON(player->button_off),player->image);
+
+	//创建button_open
+	player->button_open = gtk_button_new_with_label("");
+	gtk_table_attach_defaults(GTK_TABLE(player->table),player->button_open,36,46, 37,47);
+	player->image02 = gtk_image_new_from_pixbuf(NULL);
+	load_image(player->image02, "./button/open.png",100,100);  
+	gtk_button_set_relief(GTK_BUTTON(player->button_open),GTK_RELIEF_NONE);
+	gtk_button_set_image(GTK_BUTTON(player->button_open),player->image02);	
+	
 	//创建button_back
 	player->button_back = gtk_button_new_with_label("");
-	//将button_off添加到table中
 	gtk_table_attach_defaults(GTK_TABLE(player->table),player->button_back,29,36, 39,45);
-	//创建一个图片控件
 	player->image01 = gtk_image_new_from_pixbuf(NULL);
 	load_image(player->image01, "./button/back.png",60,60);  
-	//将建button_off的背景设成透明
 	gtk_button_set_relief(GTK_BUTTON(player->button_back),GTK_RELIEF_NONE);
-	//将图片空间添加到player->button_off上
 	gtk_button_set_image(GTK_BUTTON(player->button_back),player->image01);
 	
 	
-	//创建button_open
-	player->button_open = gtk_button_new_with_label("");
-	//将button_off添加到table中
-	gtk_table_attach_defaults(GTK_TABLE(player->table),player->button_open,36,46, 37,47);
-	//创建一个图片控件
-	player->image02 = gtk_image_new_from_pixbuf(NULL);
-	load_image(player->image02, "./button/open.png",100,100);  
-	//将建button_off的背景设成透明
-	gtk_button_set_relief(GTK_BUTTON(player->button_open),GTK_RELIEF_NONE);
-	//将图片空间添加到player->button_off上
-	gtk_button_set_image(GTK_BUTTON(player->button_open),player->image02);		
-	
 	//创建button_front
 	player->button_front = gtk_button_new_with_label("");
-	//将button_off添加到table中
 	gtk_table_attach_defaults(GTK_TABLE(player->table),player->button_front,46,52, 39,45);
-	//创建一个图片控件
 	player->image03 = gtk_image_new_from_pixbuf(NULL);
 	load_image(player->image03, "./button/front.png",60,60);  
-	//将建button_off的背景设成透明
 	gtk_button_set_relief(GTK_BUTTON(player->button_front),GTK_RELIEF_NONE);
-	//将图片空间添加到player->button_off上
 	gtk_button_set_image(GTK_BUTTON(player->button_front),player->image03);
 	
 	//创建button_menu
 	player->button_menu = gtk_button_new_with_label("");
-	//将button_off添加到table中
 	gtk_table_attach_defaults(GTK_TABLE(player->table),player->button_menu,3,9, 40,47);
-	
-	//创建一个图片控件     
 	player->image04 = gtk_image_new_from_pixbuf(NULL);
 	load_image(player->image04, "./button/menu.png",50,60);  
-	//将建button_off的背景设成透明
 	gtk_button_set_relief(GTK_BUTTON(player->button_menu),GTK_RELIEF_NONE);
-	//将图片空间添加到player->button_off上
 	gtk_button_set_image(GTK_BUTTON(player->button_menu),player->image04);
 	
 	//------------------------------------创建分栏列表--------------------------------------
-	//新建一个分栏类表
 	gchar *titles[1] ={"歌单列表"};
 	player->clist = gtk_clist_new_with_titles(1,titles);
-	//将分栏列表添加到表格布局中
 	gtk_table_attach_defaults(GTK_TABLE(player->table),player->clist,57,74, 7,37);
-	//设置分栏列表中各列的宽度
 	gtk_clist_set_column_width(GTK_CLIST(player->clist),0,110);
-	//设置各列的对齐方式
 	gtk_clist_set_column_justification(GTK_CLIST(player->clist),0,GTK_JUSTIFY_LEFT);
 	get_menu(player);
-	
-	
 	
 	//------------------------------文本---------时间-----------------------------------------------
 	//创建文本
 	player->lable_song_time = gtk_label_new("0:0");
 	sungtk_widget_set_font_color(player->lable_song_time,"white",NULL);
 	gtk_table_attach_defaults(GTK_TABLE(player->table),player->lable_song_time,50,57, 31,34);
+	
+	
 	//创建文本
 	player->lable_now_time = gtk_label_new("0:0");
 	sungtk_widget_set_font_color(player->lable_now_time,"white",NULL);
 	gtk_table_attach_defaults(GTK_TABLE(player->table),player->lable_now_time,25,31, 31,34);
 	
-	
 	//--------------------------------------------进度条----------------------------
-	
 	//创建一个进度条控件
 	player->progress_bar = gtk_progress_bar_new();
-	//设置文本在进度条控件上
 	gtk_progress_bar_set_text(GTK_PROGRESS_BAR(player->progress_bar),"");
-	//设置进度条初始化百分比
 	gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(player->progress_bar),0.0);
-	
 	gtk_table_attach_defaults(GTK_TABLE(player->table),player->progress_bar,25,55, 35,36);
-	
 	player->ii =1;//由于默认播放的音乐编号为1，所以将ii设为初始1
 	
 	//创建一个进度条控件
 	player->progress_bar2 = gtk_progress_bar_new();
-	//设置文本在进度条控件上
 	gtk_progress_bar_set_text(GTK_PROGRESS_BAR(player->progress_bar2),"");
-	//设置进度条初始化百分比
-	gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(player->progress_bar2), 0.6);
+	gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(player->progress_bar2), 0.14);
 	gtk_progress_bar_set_orientation(GTK_PROGRESS_BAR(player->progress_bar2), GTK_PROGRESS_BOTTOM_TO_TOP);
 	gtk_table_attach_defaults(GTK_TABLE(player->table),player->progress_bar2,75,76, 7,37);
-	
-	
 	//------------------------------歌曲名称及歌词、演唱者信息 文本----------------------------------------
 	
 	//创建文本
 	player->lable_song_name = gtk_label_new("111");
 	gtk_label_set_text(GTK_LABEL(player->lable_song_name),"歌曲名称");
-	
-	
 	set_label_font_size(player->lable_song_name, 17);
-	
-	
 	gtk_table_attach_defaults(GTK_TABLE(player->table),player->lable_song_name,31,48, 7,11);
 	sungtk_widget_set_font_color(player->lable_song_name,"white",NULL);
+	
 	//创建文本
 	player->lable_song_artist = gtk_label_new("  歌手  ");
 	gtk_label_set_text(GTK_LABEL(player->lable_song_artist),"歌手");
 	gtk_table_attach_defaults(GTK_TABLE(player->table),player->lable_song_artist,31,48, 11,14);
 	sungtk_widget_set_font_color(player->lable_song_artist,"white",NULL);
+	
 	//创建文本
 	player->lable_song_lrc = gtk_label_new("  歌词  ");
 	gtk_label_set_text(GTK_LABEL(player->lable_song_lrc),"歌词");
 	set_label_font_size(player->lable_song_lrc, 17);
 	gtk_table_attach_defaults(GTK_TABLE(player->table),player->lable_song_lrc,25,55, 15,30);
 	sungtk_widget_set_font_color(player->lable_song_lrc,"white",NULL);
-	//------------------------------------------------------------------------------------------------
 	
 	//-------------------------------------动起来-------------------------------------------
 	g_signal_connect(player->button_open,"clicked", G_CALLBACK(callback), player);//暂停控制
 	g_signal_connect(player->button_off,"clicked", G_CALLBACK(callback1), player);//声音控制
 	g_signal_connect(player->clist,"select_row", G_CALLBACK(my_select_row), player);//点击分栏列表
-	//g_signal_connect(player->button_menu,"clicked", G_CALLBACK(deal_button), player);//菜单备用键
+//	g_signal_connect(player->button_menu,"clicked", G_CALLBACK(deal_button), player);//菜单备用键
 	g_signal_connect(player->button_front,"clicked", G_CALLBACK(next_song), player);//上一曲
 	g_signal_connect(player->button_back,"clicked", G_CALLBACK(last_song), player);//下一曲
 	//------------------------------------------------------------------------------------
-	//显示所有窗口
+	
+	
 	gtk_widget_show_all(player->main_window);
-	//主事件循环
 	gtk_main();
 	return;
 }
@@ -322,32 +268,25 @@ int get_menu(MPLAYER *player)
 	struct dirent *dirp;//静态
 	int i = 0;
 	player->max = 0;
-	
-	if((dir=opendir("../music"))==NULL)//从指定文件夹读取
+	if((dir=opendir("../Music"))==NULL)//从指定文件夹读取
 	{
 		printf("Open dir tmpdir fail\n");
 		exit(1);
 	}
-	
 	while((dirp=readdir(dir))!=NULL )
 	{
 		printf("Name:%s\n",dirp->d_name);
-		player->song_list[i]=(char*)malloc(sizeof(dirp->d_name)+1);//申请空间
-		
-		if (strlen(dirp->d_name)<3)//利用字符个数排除相应的字符（例如。  。。 一个表示返回上层的入口地址，一个是本层的入口）
+		player->song_list[i]=(char*)malloc(sizeof(dirp->d_name)+1);  //申请空间
+		if (strlen(dirp->d_name)<3)   //利用字符个数排除相应的字符（例如。  。。 一个表示返回上层的入口地址，一个是本层的入口）
 		{
 			continue;
 		}
-		strcpy(player->song_list[i],dirp->d_name);//将目录内容考入每一行
-		
-		gtk_clist_append(GTK_CLIST(player->clist),&player->song_list[i]);//将目录放入分栏列表
-		
+		strcpy(player->song_list[i],dirp->d_name);   //将目录内容考入每一行
+		gtk_clist_append(GTK_CLIST(player->clist), &player->song_list[i]);   //将目录放入分栏列表
 		i++;
 	}
-	player->max = i;//总歌曲数加一（从0 开始数的就是总歌曲数）获取最大的值为歌曲总数
-	
+	player->max = i;  //总歌曲数加一（从0 开始数的就是总歌曲数）获取最大的值为歌曲总数
 	closedir(dir);
-	
 	return 0;
 }
 
@@ -363,27 +302,22 @@ gpointer my_read(gpointer arg)
 		
 		if (player->signal_i == 0)
 		{
-			//printf("dudududududdudu----------------------%d\n", player->signal_i);
 			char ever_msg[256] = "";//用于接传来的命令返回信息
 			char time_now[64] = "";//字符串形式的时间
 			char time_tal[64] = "";//将要向时间文本中写入的时间字符串
 			int now_time=0, now_time_s=0,tal_time=0;
 			char song_msg[128] = "";
 			char singer_msg[128] = "";
-			char song[128]= "";//歌曲名
+			char song[128] = "";//歌曲名
 			
 			read(player->fd[0], ever_msg, sizeof(ever_msg));//从无名管道中读取返回信息
-			
-			
-			int value =0;//进度
-			
+			int value =0;//度
 			if(strncmp(ever_msg, "ANS_TIME_POSITION=", 18) ==0)//现在时间
 			{
 				sscanf(ever_msg, "%*18s%d.%d", &now_time_s,&now_time);//裁剪
 				sprintf(time_now, "%d:%d", now_time_s/60, now_time_s%60);//组包
 				player->lrc_time = (now_time_s/60)*60000 + (now_time_s%60)*1000;//赋值
 				player->now_time_s = now_time_s;
-				
 				gdk_threads_enter();	// 进入多线程互斥区域
 				gtk_label_set_text(GTK_LABEL(player->lable_now_time), time_now);//将现在时间写入gtk页面中的文本
 				gdk_threads_leave();	// 退出多线程互斥区域	
@@ -397,14 +331,16 @@ gpointer my_read(gpointer arg)
 				if( (value*0.01) == 0.99)//判断进度条是不是达到1  到了1 进行下一曲
 				{
 					char song_bufs[256] = "";
-					sprintf(song_bufs, "loadfile ../music/%s\n", player->song_list[player->ii+1]);//组包成命令
+					sprintf(song_bufs, "loadfile ../Music/%s\n", player->song_list[player->ii+1]);//组包成命令
 					player->ii ++;
 					write(player->fd1, song_bufs, strlen(song_bufs));//将列表顺序播放的命令发给mplayer
 					
 				}
-				
+				int x = rand() % 30;
 				gdk_threads_enter();	// 进入多线程互斥区域
 				gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(player->progress_bar),value*0.01);//写入进度条
+				if (x <= 10)
+					gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(player->progress_bar2),player->yy);
 				gdk_threads_leave();	// 退出多线程互斥区域
 				
 			}
@@ -413,9 +349,6 @@ gpointer my_read(gpointer arg)
 			{
 				sscanf(ever_msg, "%*11s%d", &tal_time);//裁剪
 				sprintf(time_tal, "%d:%d", tal_time/60, tal_time%60);//组包
-				
-				//printf("%d\n", tal_time);
-				//strcpy(player->tal_time, tal_time);
 				player->tal_time = tal_time;
 				gdk_threads_enter();	// 进入多线程互斥区域
 				gtk_label_set_text(GTK_LABEL(player->lable_song_time), time_tal);//将时间写入页面的总时间文本内
@@ -444,29 +377,21 @@ gpointer my_read(gpointer arg)
 				gtk_label_set_text(GTK_LABEL(player->lable_song_name), player->song);
 				gdk_threads_leave();	// 退出多线程互斥区域
 			}
-			
 			if(strncmp(ever_msg, "ANS_META_ARTIST=", 16) ==0)//获取歌手信息
 			{
 				sscanf(ever_msg, "%*17s%[^']", singer_msg);
 				sprintf(player->singer, "%s", singer_msg);
-				
 				gdk_threads_enter();	// 进入多线程互斥区域
 				gtk_label_set_text(GTK_LABEL(player->lable_song_artist), player->singer);
 				gdk_threads_leave();	// 退出多线程互斥区域
-				
 			}
-			
-			
 		}	
 	}
-	
 }
 
-
-
+//--------------------对于右边文本框，实现点击切歌的功能 以及调节音量的功能----------------------------//
 gboolean deal_mouse_press(GtkWidget *widget, GdkEventButton *event,gpointer user_data)  
 {
-	//25,55, 35,36                 75,76, 7,37
 	MPLAYER *player = (MPLAYER *)user_data;
 	long nowtime = 0;
 	int taltime = 0;
@@ -480,28 +405,26 @@ gboolean deal_mouse_press(GtkWidget *widget, GdkEventButton *event,gpointer user
 		newtime = newtime - player->now_time_s;
 		int i = 0;
 		i = player->ii;
-		
 		char thetime[128] = "";
 		sprintf(thetime, "seek %ld\n", newtime);
-		write(player->fd1, thetime, strlen(thetime));//获取当前歌曲文件名
+		write(player->fd1, thetime, strlen(thetime));
 	}
 	else if  ((event->x >740) && (event->x <770) && ((event->y >70) && (event->y < 370)))
 	{
 		printf("event->y    %lf\n", event->y);
 		player->yy = 1 - ((((event->y)/10) - 7)/30);
 		printf("yy = %lf\n", player->yy);
-		
 		volume = (int)(player->yy *100);
+		
 		char thetime[128] = "";
 		sprintf(thetime, "volume %d 1\n", volume);
 		printf("thetime =  %s\n", thetime);
-		write(player->fd1, thetime, strlen(thetime));//获取当前歌曲文件名
-		gdk_threads_enter();	// 进入多线程互斥区域
-		gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(player->progress_bar2),player->yy);//写入进度条
-		gdk_threads_leave();	// 退出多线程互斥区域
-		
+		write(player->fd1, thetime, strlen(thetime));//获取当前歌曲文件
+//		gdk_threads_enter();	// 进入多线程互斥区域
+//		gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(player->progress_bar2),player->yy);//写入进度条
+//		gdk_threads_leave();	// 退出多线程互斥区域
 	}
-	
-	
 }
+
+
 

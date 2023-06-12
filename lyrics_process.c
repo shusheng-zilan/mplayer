@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <dirent.h>
 #include "lyrics_process.h"
 
 /*******************************************************
@@ -9,37 +10,27 @@
  *参数：		歌词文件地址：addr
  *返回值：	缓冲区首地址
  ********************************************************/
-static char *open_lrc(char *addr)
-{
+static char *open_lrc(char *addr) {
 	FILE *fptr = NULL;
-	char *lycris_buf = NULL;	//the address of malloc buf which saved lycris content
-	int size =0;
+	char *lycris_buf = NULL;  // the address of malloc buf which saved lycris content
+	int size = 0;
 	
-	if(addr == NULL)
-	{
+	if (addr == NULL) {
 		printf("error: addr or size is NULL!\n");
-	}
-	else
-	{
+	} else {
 		fptr = fopen(addr, "rb");
-		if(fptr == NULL)
-		{
-			printf("open lycris [%s] error!\n",addr);
-		}
-		else
-		{
+		if (fptr == NULL) {
+			printf("open lycris [%s] error!\n", addr);
+		} else {
 			fseek(fptr, 0, SEEK_END);
 			size = ftell(fptr);
 			rewind(fptr);
-			lycris_buf = (char *)malloc(size+1);
-			bzero(lycris_buf, size+1);
-			if(lycris_buf == NULL)
-			{
+			lycris_buf = (char *)malloc(size + 1);
+			bzero(lycris_buf, size + 1);
+			if (lycris_buf == NULL) {
 				
 				printf("malloc lycris_buf error\n");
-			}
-			else
-			{
+			} else {
 				
 				fread(lycris_buf, size, 1, fptr);
 			}
@@ -49,55 +40,50 @@ static char *open_lrc(char *addr)
 	return lycris_buf;
 }
 
-/*******************************************************
- *功能：     增加一个歌词信息节点至链表结尾
- *参数：		链表的表头：head
+/*************************************
+ * 功能： 创建双向链表节点
+ *************************************/
+static LRC *create_lrc_node(uint time, char *lrc) {
+	LRC *node = (LRC *)malloc(sizeof(LRC));
+	if (node == NULL) {
+		printf("内存分配失败，创建链表节点失败\n");
+		return NULL;
+	}
+	node->prev = NULL;
+	node->next = NULL;
+	node->time = time;
+	strcpy(node->lrc, lrc);
+	return node;
+}
+
+/*****************************************************************************
+ * 功能：     增加一个歌词信息节点至链表结尾
+ * 参数：    链表的表头：head
   歌词时间：time
   歌词：lrc
- *返回值：	链表的表头：head
- ********************************************************/
-static LRC *add_lrc_to_link(LRC *head, uint time, char *lrc)
+ * 返回值：  链表的表头：head
+ ******************************************************************************/
+static LRC *add_lrc_to_link(LRC *head, uint time, char *lrc) 
 {
-	LRC *nextpr,*temp;
-	nextpr = head;
+	LRC *nextpr = head;
+	LRC *node = NULL;
 	
-	if(nextpr==NULL)			//创建链表
-	{
-		head = (LRC *)malloc(sizeof(LRC));
-		if(head == NULL)
-		{
-			printf("内存分配失败，创建链表失败\n");
-			head = NULL;
-		}
-		else
-		{
-			head->time = time;
-			strcpy(head->lrc, lrc);
-			head->next = NULL;
-		}
-	}
-	else	//增加一个链表元素至链表结尾
-	{
-		while(nextpr)
-		{
-			temp = nextpr;
+	if (nextpr == NULL) {  // 创建链表
+		head = create_lrc_node(time, lrc);
+	} else {  // 增加一个链表节点至链表结尾
+		while (nextpr->next != NULL) {
 			nextpr = nextpr->next;
 		}
-		nextpr = (LRC *)malloc(sizeof(LRC));
-		if(nextpr == NULL)
-		{
-			printf("内存分配失败，增加链表元素失败\n");
-		}
-		else
-		{
-			nextpr->time = time;
-			strcpy(nextpr->lrc, lrc);
-			nextpr->next = NULL;
-			temp->next = nextpr;
+		node = create_lrc_node(time, lrc);
+		if (node != NULL) {
+			node->prev = nextpr;
+			nextpr->next = node;
 		}
 	}
+	
 	return head;
 }
+
 
 /*******************************************************
  *功能：     遍历输出链表
@@ -158,28 +144,19 @@ static void inorder_link(LRC_PTR *lrc)
 	}
 	lrc->lrc_arry[lrc->lrc_arry_size-1]->next = NULL;
 }
-
 /*******************************************************
- *功能：     判断是否是正确的时间标签
- *参数：		时间标签：label
- *返回值：	1：是；0：不是
+ * 功能：     判断是否是正确的时间标签
+ * 参数：     时间标签：label
+ * 返回值：   1：是；0：不是
  ********************************************************/
-static char judge_time_label(char *label)
-{
-	//合法时间标签示例[00:07.41
-	if(label)//label非空
-	{
-		if(strlen(label) == 9)
-		{
-			if((*(label+0)=='[') && (*(label+3)==':') && (*(label+6)=='.')
-				&& (*(label+1)>='0' && *(label+1)<='9')
-				&& (*(label+2)>='0' && *(label+2)<='9')
-				&& (*(label+4)>='0' && *(label+4)<='9')
-				&& (*(label+5)>='0' && *(label+5)<='9')
-				&& (*(label+7)>='0' && *(label+7)<='9')
-				&& (*(label+8)>='0' && *(label+8)<='9'))
-			{
-				//printf("label=%s\n", label);
+static char judge_time_label(const char *label) {
+	// 合法时间标示例 [00:07.41
+	if (label) {  // label非空
+		if (strlen(label) == 9) {
+			if ((label[0] == '[') && (label[3] == ':') && (label[6] == '.') && (label[1] >= '0' && label[1] <= '9')
+				&& (label[2] >= '0' && label[2] <= '9') && (label[4] >= '0' && label[4] <= '9')
+				&& (label[5] >= '0' && label[5] <= '9') && (label[7] >= '0' && label[7] <= '9')
+				&& (label[8] >= '0' && label[8] <= '9')) {
 				return 1;
 			}
 		}
@@ -188,70 +165,50 @@ static char judge_time_label(char *label)
 }
 
 /*******************************************************
- *功能：     计算时间标签
- *参数：		时间标签：label
- *返回值：	时间标签代表的时间(单位:ms)
+ * 功能：     计算时间标签
+ * 参数：     时间标签：label
+ * 返回值：   时间标签代表的时间(单位:ms)
  ********************************************************/
-static uint calculate_time_label(char *label)
-{
+static uint calculate_time_label(const char *label) {
 	uint mtime = 0;
 	uint minute = 0;
 	uint second = 0;
 	uint msecond = 0;
 	
-	//printf("时间标签：%s\n", label);
 	sscanf(label, "[%d:%d.%d", &minute, &second, &msecond);
-	//printf("minute=%d\n,second=%d\n,msecond=%d\n", minute, second, msecond);
-	mtime = minute*60000 + second*1000;
+	mtime = minute * 60000 + second * 1000 + msecond * 10;
 	return mtime;
 }
 
+
 /*******************************************************
- *功能：     处理歌词文件一行信息
- *参数：		行地址：line
+ * 功能：     处理歌词文件一行信息
+ * 参数：     行地址：line
   链表的表头：head
- *返回值：	链表的表头：head
+ * 返回值：   链表的表头：head
  ********************************************************/
-static LRC *dispose_line(char *line,LRC *head)
-{
+static LRC *dispose_line(char *line, LRC *head) {
 	uint i = 0;
 	uint argc = 0;
 	uint mtime = 0;
 	char *lrc_text = NULL;
 	char *argv[lrc_time_labels] = {NULL};
 	
-	//printf("line=%s=====\n", line);
 	argv[argc] = strtok(line, "]");
-	while((argv[++argc] = strtok(NULL,"]"))!=NULL)
-	{
-		if(argc>=lrc_time_labels)
-		{
+	while ((argv[++argc] = strtok(NULL, "]")) != NULL) {
+		if (argc >= lrc_time_labels) {
 			printf("lrc: too many labels\n");
 			break;
 		}
 	}
-	/*
-	  printf("argc =%d\n", argc);
-	  for(i=0;i<argc;i++)
-	  {
-	  printf("argv[%d]=%s\n", i, argv[i]);
-	  }*/
-	//取出歌词
-	if((judge_time_label(argv[0]) != 0) && (argv[argc-1] != NULL) && argc)
-	{
-		// printf("lyrics：%s\n", argv[argc-1]);
-		lrc_text = argv[argc-1];
+	// 取出歌词
+	if ((judge_time_label(argv[0]) != 0) && (argv[argc - 1] != NULL) && argc) {
+		lrc_text = argv[argc - 1];
 	}
-	//printf("\n");
-	for(i=0;i<argc && argc>1;i++)
-	{
-		//printf("argc = %d\targv[%d]=%s\n", argc, i, argv[i]);
-		if(judge_time_label(argv[i]))//判断时间标签
-		{
+	for (i = 0; i < argc && argc > 1; i++) {
+		if (judge_time_label(argv[i])) {  // 判断时间标签
 			mtime = calculate_time_label(argv[i]);
-			if(lrc_text && (strlen(lrc_text)>1))
-			{
-				//	printf("========%s======\n", lrc_text);
+			if (lrc_text && (strlen(lrc_text) > 1)) {
 				head = add_lrc_to_link(head, mtime, lrc_text);
 			}
 		}
@@ -260,36 +217,33 @@ static LRC *dispose_line(char *line,LRC *head)
 }
 
 /*******************************************************
- *功能：     将缓冲区内的'\n'换成'\0',并在每次替换时
+ * 功能：     将缓冲区内的'\n'换成'\0',并在每次替换时
   处理歌词文件行信息
- *参数：		缓冲区首地址：lycris_buf
+ * 参数：     缓冲区首地址：lycris_buf
   歌词句柄：lrc
- *返回值：	无
+ * 返回值：   无
  ********************************************************/
-static void get_dispose_line(char *lycris_buf, LRC_PTR *lrc)
-{
+static void get_dispose_line(char *lycris_buf, LRC_PTR *lrc) {
 	char *line_ptr = NULL;
 	
-	while((line_ptr = strtok(lycris_buf, "\n")) != NULL)
-	{
-		lycris_buf += strlen(lycris_buf)+1; 
+	while ((line_ptr = strtok(lycris_buf, "\n")) != NULL) {
+		lycris_buf += strlen(lycris_buf) + 1;
 		lrc->lrc_head = dispose_line(line_ptr, lrc->lrc_head);
 	}
 }
 
 /*******************************************************
- *功能：     处理歌词文件
- *参数：		歌词文件名 ：name
+ * 功能：     处理歌词文件
+ * 参数：     歌词文件名 ：name
   歌词句柄：lrc
- *返回值：	歌词信息结构体(链表)
+ * 返回值：   歌词信息结构体(链表)
  ********************************************************/
-LRC *dispose_lrc(char *name, LRC_PTR *lrc)
+LRC *dispose_lrc(char *name, LRC_PTR *lrc) 
 {
 	char *lycris_buf = NULL;
-	//printf("&&&&&&&&&&&&===%s\n", name);
-	memset(lrc, 0, sizeof(LRC_PTR));	//init lrc struct
+	memset(lrc, 0, sizeof(LRC_PTR));  // init lrc struct
 	lycris_buf = open_lrc(name);
-	if(lycris_buf != NULL)
+	if (lycris_buf != NULL) 
 	{
 		get_dispose_line(lycris_buf, lrc);
 		free(lycris_buf);
@@ -297,27 +251,80 @@ LRC *dispose_lrc(char *name, LRC_PTR *lrc)
 	}
 	else
 	{
-		printf("open_lrc error in dispose_lrc fun\n");
+		printf("open_lrc error in dispose_lrc func\n");
 		return NULL;
 	}
 	return lrc->lrc_head;
 }
 
 /*******************************************************
- *功能：     处理歌词文件
- *参数：		歌词句柄：lrc
- *返回值：	NULL
+ * 功能：     释放歌词数组
+ * 参数：     歌词句柄：lrc
+ * 返回值：   NULL
  ********************************************************/
-void free_lrc_arry(LRC_PTR *lrc)
-{
+void free_lrc_arry(LRC_PTR *lrc) {
 	int i;
-	if(lrc->lrc_arry != NULL)
-	{
-		for(i=0; i<lrc->lrc_arry_size; i++)
-		{
+	if (lrc->lrc_arry != NULL) {
+		for (i = 0; i < lrc->lrc_arry_size; i++) {
 			free(lrc->lrc_arry[i]);
 		}
 		free(lrc->lrc_arry);
 	}
 	lrc->lrc_arry = NULL;
 }
+
+//--------------------------读取文件里面的歌曲名字--------------------------//
+Name * create_node1(const char *filename) {
+	Name *newnode = (Name *)malloc(sizeof(Name));
+	newnode->data = (char *)malloc(strlen(filename) + 1);
+	strcpy(newnode->data, filename);
+	newnode->next = NULL;
+	return newnode;
+}
+
+Name * add_node(Name * head, char* newdata) {
+	Name *newnode = create_node1(newdata);
+	if (head == NULL) {
+		newnode->next = newnode;
+		return newnode;
+	}
+	Name *temp = head;
+	while (temp->next != head)
+		temp = temp->next;
+	temp->next = newnode;
+	newnode->next = head; 
+	return head;
+}
+
+void free_list(Name * head) {
+	if (head == NULL)
+		return;
+	Name *temp = head->next;
+	while (temp != head) 
+	{ // 循环直到回到头节点
+		Name *next = temp->next;
+		free(temp->data);
+		free(temp);
+		temp = next;
+	}
+	free(head->data);
+	free(head);
+}
+
+Name * read_audio_files(const char* folder_path) {
+	DIR *dir;
+	struct dirent *dp;
+	Name *head = NULL;
+	if ((dir = opendir(folder_path)) == NULL) {
+		printf("Open directory fails.\n");
+		exit(1);
+	}
+	while ((dp = readdir(dir)) != NULL) {
+		if (strstr(dp->d_name, ".mp3")) {
+			head = add_node(head, dp->d_name);
+		}
+	}
+	closedir(dir);
+	return head;
+}
+

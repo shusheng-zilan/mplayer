@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/stat.h>
 #include "othermain.h"
 #include "mplayer_gtk.h"
 //gcc lyrics_process.c main.c mplayer_gtk.c othermain.c `pkg-config –cflags –libs gtk+-2.0`
@@ -23,13 +24,10 @@ void thread_init(void)
 int main(int argc, char *argv[])
 {
 	gtk_init (&argc, &argv);
-	
-	MPLAYER player;/*定义整个Mplayer结构体*/
-	memset(&player, 0, sizeof(player));//初始化结构体
+	MPLAYER player;
+	memset(&player, 0, sizeof(player));
 	thread_init();//线程初始化
-	
 	my_course(&player);/*启动Mplayer*/
-	
 	gtk_widget_show_all(player.main_window);
 	gdk_threads_enter();	// 进入多线程互斥区域
 	gtk_main();
