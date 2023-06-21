@@ -140,13 +140,21 @@ void window_my_gtk(MPLAYER *player)
 	//移动鼠标
 	g_signal_connect(player->main_window, "button-press-event",G_CALLBACK(deal_mouse_press),player);
 	//关闭当前主窗口时退出
-	g_signal_connect(player->main_window, "destroy", G_CALLBACK(gtk_main_quit),NULL);
+	g_signal_connect(player->main_window, "destroy", G_CALLBACK(on_main_window_destroy),NULL);
 	
 	//----------------------------表格布局--------------------------------------------
 	//创建table表格布局容器
 	player->table = gtk_table_new(48, 80, TRUE);
 	//将表格布局容器添加到主窗口中
 	gtk_container_add(GTK_CONTAINER(player->main_window),player->table);
+	
+	//-----------------搜索框
+	player->search_entry = gtk_entry_new();
+	gtk_table_attach_defaults(GTK_TABLE(player->table), player->search_entry, 57, 74, 4, 7);
+	
+	player->search_button = gtk_button_new_with_label("搜索");
+	gtk_table_attach_defaults(GTK_TABLE(player->table), player->search_button, 74, 80, 4, 7);
+	g_signal_connect(player->search_button, "clicked", G_CALLBACK(search_song), player);
 	
 	//------------------------------按钮---------------------------------------------
 	//创建button_off
@@ -176,7 +184,7 @@ void window_my_gtk(MPLAYER *player)
 	
 	//创建button_front
 	player->button_front = gtk_button_new_with_label("");
-	gtk_table_attach_defaults(GTK_TABLE(player->table),player->button_front,46,52, 39,45);
+	gtk_table_attach_defaults(GTK_TABLE(player->table),player->button_front,48,54, 39,45);
 	player->image03 = gtk_image_new_from_pixbuf(NULL);
 	load_image(player->image03, "./button/front.png",60,60);  
 	gtk_button_set_relief(GTK_BUTTON(player->button_front),GTK_RELIEF_NONE);
@@ -261,36 +269,27 @@ void window_my_gtk(MPLAYER *player)
 	return;
 }
 
-//-------------------------------------------分栏列表获取信息------------------------------------
+/////-----------歌曲的列表
 int get_menu(MPLAYER *player)
 {
-	DIR *dir;
-	struct dirent *dirp;//静态
+	Name *head = read_audio_files("../Music"); // 调用 read_audio_files() 函数获取文件名链表
 	int i = 0;
 	player->max = 0;
-	if((dir=opendir("../Music"))==NULL)//从指定文件夹读取
-	{
-		printf("Open dir tmpdir fail\n");
-		exit(1);
-	}
-	while((dirp=readdir(dir))!=NULL )
-	{
-		printf("Name:%s\n",dirp->d_name);
-		player->song_list[i]=(char*)malloc(sizeof(dirp->d_name)+1);  //申请空间
-		if (strlen(dirp->d_name)<3)   //利用字符个数排除相应的字符（例如。  。。 一个表示返回上层的入口地址，一个是本层的入口）
-		{
+	while (head != NULL ) {
+		if (strlen(head->data) < 3) {
 			continue;
 		}
-		strcpy(player->song_list[i],dirp->d_name);   //将目录内容考入每一行
-		gtk_clist_append(GTK_CLIST(player->clist), &player->song_list[i]);   //将目录放入分栏列表
+		player->song_list[i] = (char*)malloc(strlen(head->data) + 1);
+		strcpy(player->song_list[i], head->data);
+		gtk_clist_append(GTK_CLIST(player->clist), &player->song_list[i]);
 		i++;
+		player->max++;
+		head = head->next;
 	}
-	player->max = i;  //总歌曲数加一（从0 开始数的就是总歌曲数）获取最大的值为歌曲总数
-	closedir(dir);
+	free_list(head);
+	
 	return 0;
 }
-
-
 
 //---------------------------------------从无名管道中读取数据----------------------------------------------
 gpointer my_read(gpointer arg)
@@ -326,7 +325,6 @@ gpointer my_read(gpointer arg)
 			if (strncmp(ever_msg, "ANS_PERCENT_POSITION=", 21) ==0)//进度
 			{
 				sscanf(ever_msg, "%*21s%d", &value);//裁剪
-				
 				//列表顺序播放
 				if( (value*0.01) == 0.99)//判断进度条是不是达到1  到了1 进行下一曲
 				{
@@ -372,7 +370,6 @@ gpointer my_read(gpointer arg)
 					strcpy(file_name, song_msg);//切歌更改歌曲名
 					player->file_flag = 1;
 				}
-				
 				gdk_threads_enter();	// 进入多线程互斥区域
 				gtk_label_set_text(GTK_LABEL(player->lable_song_name), player->song);
 				gdk_threads_leave();	// 退出多线程互斥区域
@@ -389,7 +386,7 @@ gpointer my_read(gpointer arg)
 	}
 }
 
-//--------------------对于右边文本框，实现点击切歌的功能 以及调节音量的功能----------------------------//
+//--------------------对于右边文本框，实现拖动进度条的功能 以及调节音量的功能----------------------------//
 gboolean deal_mouse_press(GtkWidget *widget, GdkEventButton *event,gpointer user_data)  
 {
 	MPLAYER *player = (MPLAYER *)user_data;
@@ -419,12 +416,17 @@ gboolean deal_mouse_press(GtkWidget *widget, GdkEventButton *event,gpointer user
 		char thetime[128] = "";
 		sprintf(thetime, "volume %d 1\n", volume);
 		printf("thetime =  %s\n", thetime);
-		write(player->fd1, thetime, strlen(thetime));//获取当前歌曲文件
-//		gdk_threads_enter();	// 进入多线程互斥区域
-//		gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(player->progress_bar2),player->yy);//写入进度条
-//		gdk_threads_leave();	// 退出多线程互斥区域
+		write(player->fd1, thetime, strlen(thetime));
 	}
 }
 
 
+// 退出主窗口时的回调函数
+void on_main_window_destroy(GtkWidget *widget, gpointer data) {
+	// 杀死Mplayer进程
+	system("killall mplayer");
+	
+	// 退出GTK+主循环
+	gtk_main_quit();
+}
 

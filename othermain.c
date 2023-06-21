@@ -13,7 +13,6 @@
 //修改图片的函数
 void load_image(GtkWidget *tmp, const gchar *file_name, gint w, gint h)
 {
-	printf ("YES\n");
 	//清空原有图片既清空控件内容
 	gtk_image_clear(GTK_IMAGE(tmp));
 	//创建一个图片资源控件
@@ -65,19 +64,16 @@ void callback(GtkWidget *widget, gpointer data)
 	if (is_playing) {
 		load_image(image, "./button/close.png", 100, 100);
 		is_playing = FALSE;
-		strcpy(cmd, "pause\n");
 	} else {
 		load_image(image, "./button/open.png", 100, 100);
 		is_playing = TRUE;
-		strcpy(cmd, "pause\n");
 	}
-	write(fd, cmd, strlen(cmd));
+	write(fd, "pause\n", strlen("pause\n"));
 }
 
 //------------------------------------------------静音----------------------------------------------
 void callback1(GtkWidget *widget, gpointer data)
 {
-	printf("123");
 	int fd =0;
 	fd = ((MPLAYER *)data)->fd1;
 	char cmd[128] ="";//cmd为向子进程发送的控制mplayer信号 
@@ -130,26 +126,28 @@ void my_select_row(GtkCList *clist, gint arg1, gint arg2, GdkEvent *arg3, MPLAYE
 
 void next_song(GtkWidget *widget, gpointer data)
 {
-	printf("%d", 222);
-	MPLAYER *player = (MPLAYER *)data;//转
-	int i =0;
-	char song_name[128] ="";//用于接歌名
-	strcpy(song_name, player->song_name);
-	if (player->max == player->ii)//判断歌曲编号是否为最大max
-	{
-		i = 0;//改变当前歌曲编号
-		sprintf(song_name, "loadfile %s\n", player->song_list[i]);//命令组包
-	}
-	else
-	{
-		i =  player->ii;//改变当前歌曲编号
-		i++;//进行下一曲操作
-		sprintf(song_name, "loadfile ../Music/%s\n", player->song_list[i]);//命令组包
-	}
-	player->ii = i;//改变当前歌曲编号
-	write(player->fd1, song_name, strlen(song_name));//写入命令至管道
+	MPLAYER *player = (MPLAYER *)data;
+	int i = 0;
+	char song_name[128] = "";
 	
+	if (player->max == player->ii) {
+		i = 0;
+	} else {
+		i = player->ii + 1;
+	}
+	player->ii = i;
+	Name *song_list = read_audio_files("../Music");
+	if (song_list != NULL) {
+		Name *current = song_list;
+		for (int j = 0; j < i; j++) {
+			current = current->next;
+		}
+		sprintf(song_name, "loadfile ../Music/%s\n", current->data);
+		free_list(song_list);
+		write(player->fd1, song_name, strlen(song_name));
+	}
 }
+
 
 
 
@@ -157,28 +155,31 @@ void next_song(GtkWidget *widget, gpointer data)
 void last_song(GtkWidget *widget, gpointer data)
 {
 	MPLAYER *player = (MPLAYER *)data;
-	int i =0;
-	char song_name[128] ="";
-	strcpy(song_name, player->song_name);
-	if (player->ii == 0)
-	{
+	int i = 0;
+	char song_name[128] = "";
+	
+	if (player->ii == 0) {
 		i = player->max;
-		//strcpy(song_name,player->song_list[i]);
-		sprintf(song_name, "loadfile %s\n", player->song_list[i]);
+	} else {
+		i = player->ii - 1;
 	}
-	else
-	{
-		i =  player->ii;
-		i--;
-		//strcpy(song_name,player->song_list[i]);
-		sprintf(song_name, "loadfile ../Music/%s\n", player->song_list[i]);
-	}
+	
 	player->ii = i;
-	if (player->signal_i == 0)
-	{
-		write(player->fd1, song_name, strlen(song_name));
+	Name *song_list = read_audio_files("../Music");
+	if (song_list != NULL) {
+		Name *current = song_list;
+		for (int j = 0; j < i; j++) {
+			current = current->next;
+		}
+		sprintf(song_name, "loadfile ../Music/%s\n", current->data);
+		free_list(song_list);
+		if (player->signal_i == 0) {
+			write(player->fd1, song_name, strlen(song_name));
+		}
 	}
 }
+
+
 
 // ------------------------------------------歌词处理-------------------------------------------
 gpointer the_lrc(gpointer arg)
@@ -187,7 +188,7 @@ gpointer the_lrc(gpointer arg)
 	LRC_PTR lrc;
 	LRC *head = NULL;
 	
-	while (1)  //暂时没找到合适的条件// 添加退出循环条件
+	while (1)  //暂时没找到合适的条件
 	{
 		if (player->signal_i == 0 && player->file_flag == 1)
 		{
@@ -257,4 +258,38 @@ int sungtk_color_get(const char *color_buf, GdkColor *color)
 	gdk_color_parse(color_buf, color);
 	return 0;
 }
+//搜索
+void search_song(GtkWidget *widget, gpointer data) {
+	MPLAYER *player = (MPLAYER *)data;
+	const gchar *search_text = gtk_entry_get_text(GTK_ENTRY(player->search_entry));
+	
+	// 遍历歌曲文件夹，匹配搜索文本
+	Name *song_list = read_audio_files("../Music");
+	Name *current = song_list;
+	while (current != NULL) {
+		if (strstr(current->data, search_text) != NULL) {
+			// 找到匹配的歌曲
+			gchar buf[128] = "";
+			sscanf(current->data, "%[^.]", buf);
+			sprintf(player->song_name, "../Music/%s.mp3", buf);
+			sprintf(player->buf, "../lrc/%s.lrc", buf);
+			
+			// 更新播放器状态
+			char song_name[128] = "";
+			sprintf(song_name, "loadfile %s\n", player->song_name);
+			write(player->fd1, song_name, strlen(song_name));
+			
+			// 释放歌曲列表内存
+			free_list(song_list);
+			return;
+		}
+		current = current->next;
+	}
+	
+	// 如果没有找到匹配的歌曲，可以在这里添加一些提示或其他操作
+	
+	// 释放歌曲列表内存
+	free_list(song_list);
+}
+
 

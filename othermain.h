@@ -35,6 +35,8 @@ typedef struct _window //结构体 方便进行传地址（内容）
 	GtkWidget *fixed;//
 	GtkWidget *clist;//分栏列表
 	GtkWidget *lable_lrc;
+	GtkWidget *search_entry;//搜索
+	GtkWidget *search_button;//按钮
 	
 	//gchar就是char
 	gchar buf[128];//现在放的歌曲名称格式为   xxxx。MP3
@@ -69,7 +71,6 @@ typedef struct _window //结构体 方便进行传地址（内容）
 	
 }MPLAYER; //重命名为WINDOW
 
-// extern void deal_button(GtkButton *button, gpointer user_data);
 extern void load_image(GtkWidget *tmp, const gchar *file_name, gint w, gint h);
 extern void progress_bar_add( gpointer user_data,gdouble bar);
 extern void callback(GtkWidget *widget, gpointer data);
@@ -82,5 +83,5 @@ extern void last_song(GtkWidget *widget, gpointer data);//上一曲
 extern gpointer the_lrc(gpointer arg);
 extern int sungtk_widget_set_font_color(GtkWidget *widget, const char *color_buf, gboolean is_button);
 extern int sungtk_color_get(const char *color_buf, GdkColor *color);
-//extern int sungtk_clist_select_row(SunGtkCList *clist, gint row, const gchar *color_buf);
+extern void search_song(GtkWidget *widget, gpointer data);
 #endif
